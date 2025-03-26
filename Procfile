@@ -1,0 +1,1 @@
+worker: python GPXtoTXT02.py
