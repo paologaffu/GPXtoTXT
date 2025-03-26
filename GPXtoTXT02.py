@@ -1,4 +1,7 @@
 import os
+
+TOKEN = os.getenv("TOKEN")
+
 import time
 import gpxpy
 import requests
