@@ -1,10 +1,8 @@
 import os
-
-TOKEN = os.getenv("TOKEN")
-
 import time
 import gpxpy
 import requests
+from collections import Counter
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
@@ -22,6 +20,24 @@ def reverse_geocode(lat, lon):
     except requests.RequestException:
         return "Errore di geocodifica"
 
+# === Funzione per filtrare le strade secondo le regole richieste ===
+def filter_repeated_streets(street_list):
+    """Mantiene solo le strade che appaiono almeno due volte, eccetto se sono uniche tra due strade diverse."""
+    street_counts = Counter(street_list)  # Conta le occorrenze di ogni strada
+    filtered_streets = []
+
+    for i, street in enumerate(street_list):
+        if street_counts[street] > 1:
+            # Se la strada appare più volte, la teniamo solo la prima volta
+            if street not in filtered_streets:
+                filtered_streets.append(street)
+        else:
+            # Se appare una sola volta, la teniamo solo se collega due strade diverse
+            if (i > 0 and i < len(street_list) - 1) and (street_list[i - 1] != street_list[i + 1]):
+                filtered_streets.append(street)
+
+    return filtered_streets
+
 # === Funzione per estrarre le strade da un file GPX ===
 def extract_street_names(gpx_file):
     """Legge il file GPX ed estrae l'elenco delle strade attraversate in ordine di percorrenza."""
@@ -38,18 +54,17 @@ def extract_street_names(gpx_file):
 
     print(f"Trovate {len(coordinates)} coordinate")  # 🔹 Debug
 
-    street_names = []
-    seen_streets = set()
-
+    raw_street_names = []
     for lat, lon in coordinates[::2]:  # Prendiamo un punto ogni due
         street_name = reverse_geocode(lat, lon)
-        if street_name not in seen_streets:  # Evitiamo duplicati consecutivi
-            street_names.append(street_name)
-            seen_streets.add(street_name)
+        raw_street_names.append(street_name)
         time.sleep(1)  # Rispettiamo i limiti di Nominatim
 
-    print("Elenco strade:", street_names)  # 🔹 Debug
-    return street_names
+    # 🔹 Applichiamo il filtro per pulire l'elenco
+    filtered_street_names = filter_repeated_streets(raw_street_names)
+
+    print("Elenco strade filtrato:", filtered_street_names)  # 🔹 Debug
+    return filtered_street_names
 
 # === Gestisce il comando /start ===
 async def start(update: Update, context) -> None:
@@ -105,7 +120,7 @@ async def handle_gpx(update: Update, context) -> None:
 # === Funzione principale per avviare il bot ===
 def main():
     """Avvia il bot di Telegram."""
-    TOKEN = "7391567508:AAG5Ydf502b9MnG0WwX8dVhCBUBBjNv71C4"
+    TOKEN = os.getenv("TOKEN")
 
     app = Application.builder().token(TOKEN).build()
 
